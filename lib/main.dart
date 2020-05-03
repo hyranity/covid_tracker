@@ -1,8 +1,12 @@
+import 'package:covidtracker/Util/AppWide.dart';
+import 'package:covidtracker/Util/CustomDialog.dart';
+import 'package:covidtracker/stats.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_database/firebase_database.dart';
-import 'package:covidtracker/Model/Country.dart';
+import 'package:covidtracker/Model/CovidCountry.dart';
 import 'package:intl/intl.dart';
 import 'package:countdown/countdown.dart';
 import 'package:http/http.dart';
@@ -64,29 +68,61 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   String countryCode = "MY";
-  Country country = Country.create("name", 0, DateTime.now(), 0);
-  Future<Country> futureCountry;
+  CovidCountry country = CovidCountry.create("name", 0, DateTime.now(), 0);
+  Future<CovidCountry> futureCountry;
   String displayCount = "0";
   String displayTodayCount = "0";
   String countDown = "";
   DatabaseReference ref = _database.reference().child("MY");
   bool hasSetState = false;
   Position _currentPos;
+  Future<Placemark> place;
+  int tries = 0;
+  final Geolocator geolocator = Geolocator()..forceAndroidLocationManager;
+  FirebaseMessaging fm = new FirebaseMessaging();
 
+  //Obtain user address
+  Future<List<Placemark>> getAddress() async {
+    if (await geolocator.checkGeolocationPermissionStatus() !=
+        GeolocationStatus.denied) {
+      _currentPos = await geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.best);
+
+      if (_currentPos == null) return null;
+
+      return geolocator.placemarkFromCoordinates(
+          _currentPos.latitude, _currentPos.longitude);
+    } else {
+      print("GPS not enabled");
+    }
+  }
+
+  Widget getAddressStr() {
+    FutureBuilder<List<Placemark>>(
+        future: getAddress(),
+        builder: (BuildContext context, AsyncSnapshot<List<Placemark>> snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            print("getting address");
+            return new CircularProgressIndicator();
+          }
+
+          Placemark place = snap.data[0];
+          setState(() {
+            countryCode = place.isoCountryCode;
+          });
+          return Text(place.subLocality + ", " + place.locality,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.poppins(
+                height: 1.5,
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Colors.white,
+              ));
+        });
+  }
 
   DatabaseReference getRef(String countryCode) {
     return _database.reference().child(countryCode);
-  }
-
-  @override
-  void onInit() {
-    setState(() {
-      ref.once().then((DataSnapshot snapshot) {
-        setState(() {
-          update(snapshot);
-        });
-      });
-    });
   }
 
   //Set state listeners
@@ -94,6 +130,8 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   void initState() {
     WidgetsBinding.instance.addObserver(this);
     super.initState();
+    refresh();
+    fm.subscribeToTopic("all");
   }
 
   @override
@@ -119,14 +157,28 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //Update data
   update(DataSnapshot snapshot) {
+    tries = 0;
+    setState(() {
+      getAddress();
+    });
+
+    while (place == null && tries < 5) {
+      setState(() {
+        getAddress();
+        tries++;
+      });
+    }
+
     //Get from JSON url
-    futureCountry = Country.Get(countryCode);
+    futureCountry = CovidCountry.Get(countryCode);
     futureCountry.then((result) {
       if (result != null)
         setState(() {
           country = result;
           displayCount = NumberFormat.compact().format(country.cases);
           displayTodayCount = NumberFormat.compact().format(country.todayCases);
+          //Set global variable
+          AppWide.country = result;
         });
     });
 
@@ -178,40 +230,47 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
         child: OverflowBox(
           child: Stack(
             children: <Widget>[
-              Padding(
-                padding: const EdgeInsets.only(top: 70.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      "Keep calm.",
-                      textAlign: TextAlign.left,
-                      style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 30,
-                          color: Color.fromRGBO(0, 0, 0, 0.4)),
-                    ),
-                    SizedBox(
-                      height: 0,
-                    ),
-                    Text(
-                      "Stay safe.",
-                      textAlign: TextAlign.left,
-                      style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 40,
-                          color: Color.fromRGBO(0, 0, 0, 0.8),
-                          height: 1.1),
-                    ),
+              FutureBuilder<void>(
+                  future: futureCountry,
+                  builder: (BuildContext context, AsyncSnapshot snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done)
+                      return new CircularProgressIndicator();
 
-                    //The four sections
-                    newsSection(),
-                    quarantineTimeSection(),
-                    statsSection(),
-                    locationSection()
-                  ],
-                ),
-              ),
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 70.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            "Keep calm.",
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 30,
+                                color: Color.fromRGBO(0, 0, 0, 0.4)),
+                          ),
+                          SizedBox(
+                            height: 0,
+                          ),
+                          Text(
+                            "Stay safe.",
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 40,
+                                color: Color.fromRGBO(0, 0, 0, 0.8),
+                                height: 1.1),
+                          ),
+
+                          //The four sections
+                          newsSection(),
+                          quarantineTimeSection(),
+                          statsSection(),
+                          locationSection()
+                        ],
+                      ),
+                    );
+                  }),
               //Refresh button
               refreshButton()
             ],
@@ -221,17 +280,22 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     );
   }
 
+  //Refresh action
+  void refresh() {
+    ref.once().then((DataSnapshot snapshot) {
+      print("Updating");
+      setState(() {
+        update(snapshot);
+      });
+    });
+  }
+
   //Refresh button
   Widget refreshButton() {
     return Positioned(
       child: InkWell(
           onTap: () {
-            ref.once().then((DataSnapshot snapshot) {
-              print("Updating");
-              setState(() {
-                update(snapshot);
-              });
-            });
+            refresh();
           },
           child: Text("refresh",
               style: GoogleFonts.poppins(
@@ -245,63 +309,69 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //News section
   Widget newsSection() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20.0, bottom: 28.0),
-      child: new Container(
-        height: 125.0,
-        width: 330,
-        decoration: BoxDecoration(
-          color: Color.fromRGBO(169, 226, 235, 1),
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.all(Radius.circular(25.0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 30.0, top: 20),
-          child: Row(
-            children: <Widget>[
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text("News",
-                      textAlign: TextAlign.left,
-                      style: GoogleFonts.poppins(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        color: Color.fromRGBO(91, 131, 136, 1),
-                      )),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 3.5),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: 180),
-                      child: Text("New cases in Kota Kinabalu reported",
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 2,
-                          textAlign: TextAlign.left,
-                          style: GoogleFonts.poppins(
-                            height: 1.05,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 20,
-                            color: Colors.white,
-                          )),
+    return InkWell(
+      onTap: () {
+        alertUser(context, "Stay tuned!",
+            "This feature has not yet been implemented, but it will be coming soon.");
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 20.0, bottom: 28.0),
+        child: new Container(
+          height: 125.0,
+          width: 330,
+          decoration: BoxDecoration(
+            color: Color.fromRGBO(169, 226, 235, 1),
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.all(Radius.circular(25.0)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 30.0, top: 20),
+            child: Row(
+              children: <Widget>[
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text("News",
+                        textAlign: TextAlign.left,
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: Color.fromRGBO(91, 131, 136, 1),
+                        )),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3.5),
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 180),
+                        child: Text("New cases in Kota Kinabalu reported",
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                              height: 1.05,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 20,
+                              color: Colors.white,
+                            )),
+                      ),
                     ),
-                  ),
-                  Text("Daily Express",
-                      style: GoogleFonts.poppins(
-                        height: 1.5,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: Colors.white,
-                      ))
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 50, left: 35),
-                child: Image.asset(
-                  'assets/images/news.png',
-                  height: 50,
+                    Text("Daily Express",
+                        style: GoogleFonts.poppins(
+                          height: 1.5,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                          color: Colors.white,
+                        ))
+                  ],
                 ),
-              )
-            ],
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 50, left: 35),
+                  child: Image.asset(
+                    'assets/images/news.png',
+                    height: 50,
+                  ),
+                )
+              ],
+            ),
           ),
         ),
       ),
@@ -310,67 +380,73 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //Quarantine Countdown
   Widget quarantineTimeSection() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
-      child: new Container(
-        height: 125.0,
-        width: 330,
-        decoration: BoxDecoration(
-          color: Color.fromRGBO(245, 200, 134, 1),
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.all(Radius.circular(25.0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 30.0, top: 20),
-          child: Stack(
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text("Quarantine",
-                          textAlign: TextAlign.left,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: Color.fromRGBO(177, 133, 67, 1),
-                          )),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3.5),
-                        child: ConstrainedBox(
-                          constraints: BoxConstraints(maxWidth: 200),
-                          child: Text(countDown,
-                              maxLines: 1,
-                              textAlign: TextAlign.left,
-                              style: GoogleFonts.poppins(
-                                height: 1.05,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 30,
-                                color: Colors.white,
-                              )),
+    return InkWell(
+      onTap: () {
+        alertUser(context, "Stay tuned!",
+            "Quarantine page has not yet been implemented, although the countdown IS working. It's coming soon!");
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
+        child: new Container(
+          height: 125.0,
+          width: 330,
+          decoration: BoxDecoration(
+            color: Color.fromRGBO(245, 200, 134, 1),
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.all(Radius.circular(25.0)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 30.0, top: 20),
+            child: Stack(
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text("Quarantine",
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: Color.fromRGBO(177, 133, 67, 1),
+                            )),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3.5),
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: 200),
+                            child: Text(countDown,
+                                maxLines: 1,
+                                textAlign: TextAlign.left,
+                                style: GoogleFonts.poppins(
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 30,
+                                  color: Colors.white,
+                                )),
+                          ),
                         ),
-                      ),
-                      Text("until next MCO update",
-                          style: GoogleFonts.poppins(
-                            height: 1.5,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: Colors.white,
-                          ))
-                    ],
-                  ),
-                ],
-              ),
-              Positioned(
-                right: 40,
-                top: 8,
-                child: Image.asset(
-                  'assets/images/question.png',
-                  height: 50,
+                        Text("until next MCO update",
+                            style: GoogleFonts.poppins(
+                              height: 1.5,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                              color: Colors.white,
+                            ))
+                      ],
+                    ),
+                  ],
                 ),
-              )
-            ],
+                Positioned(
+                  right: 40,
+                  top: 8,
+                  child: Image.asset(
+                    'assets/images/question.png',
+                    height: 50,
+                  ),
+                )
+              ],
+            ),
           ),
         ),
       ),
@@ -381,73 +457,52 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Widget statsSection() {
     return Padding(
       padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
-      child: new Container(
-        height: 125.0,
-        width: 330,
-        decoration: BoxDecoration(
-          color: Color.fromRGBO(238, 222, 155, 1),
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.all(Radius.circular(25.0)),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 30.0, top: 20),
-          child: Stack(
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text("Statistics",
-                          textAlign: TextAlign.left,
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15,
-                            color: Color.fromRGBO(170, 151, 78, 1),
-                          )),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 3.5),
-                        child: ConstrainedBox(
-                            constraints: BoxConstraints(maxWidth: 180),
-                            child: Row(
-                              // Total cases
-                              children: <Widget>[
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: <Widget>[
-                                    ConstrainedBox(
-                                      constraints:
-                                          BoxConstraints(maxWidth: 110),
-                                      child: Text(displayCount,
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 1,
-                                          textAlign: TextAlign.left,
-                                          style: GoogleFonts.poppins(
-                                            height: 1.05,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 35,
-                                            color: Colors.white,
-                                          )),
-                                    ),
-                                    Text("total cases",
-                                        style: GoogleFonts.poppins(
-                                          height: 1,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 14,
-                                          color: Colors.white,
-                                        ))
-                                  ],
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 23.0),
-                                  child: Column(
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => Stats()),
+          );
+        },
+        child: new Container(
+          height: 125.0,
+          width: 330,
+          decoration: BoxDecoration(
+            color: Color.fromRGBO(238, 222, 155, 1),
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.all(Radius.circular(25.0)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(left: 30.0, top: 20),
+            child: Stack(
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text("Statistics",
+                            textAlign: TextAlign.left,
+                            style: GoogleFonts.poppins(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15,
+                              color: Color.fromRGBO(170, 151, 78, 1),
+                            )),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3.5),
+                          child: ConstrainedBox(
+                              constraints: BoxConstraints(maxWidth: 180),
+                              child: Row(
+                                // Total cases
+                                children: <Widget>[
+                                  Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: <Widget>[
                                       ConstrainedBox(
                                         constraints:
-                                            BoxConstraints(maxWidth: 73),
-                                        child: Text(displayTodayCount,
+                                            BoxConstraints(maxWidth: 110),
+                                        child: Text(displayCount,
                                             overflow: TextOverflow.ellipsis,
                                             maxLines: 1,
                                             textAlign: TextAlign.left,
@@ -458,7 +513,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                               color: Colors.white,
                                             )),
                                       ),
-                                      Text("today",
+                                      Text("total cases",
                                           style: GoogleFonts.poppins(
                                             height: 1,
                                             fontWeight: FontWeight.w600,
@@ -467,23 +522,53 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                           ))
                                     ],
                                   ),
-                                )
-                              ],
-                            )),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              Positioned(
-                right: 40,
-                top: 8,
-                child: Image.asset(
-                  'assets/images/business.png',
-                  height: 50,
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 23.0),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        ConstrainedBox(
+                                          constraints:
+                                              BoxConstraints(maxWidth: 73),
+                                          child: Text(displayTodayCount,
+                                              overflow: TextOverflow.ellipsis,
+                                              maxLines: 1,
+                                              textAlign: TextAlign.left,
+                                              style: GoogleFonts.poppins(
+                                                height: 1.05,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 35,
+                                                color: Colors.white,
+                                              )),
+                                        ),
+                                        Text("today",
+                                            style: GoogleFonts.poppins(
+                                              height: 1,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                              color: Colors.white,
+                                            ))
+                                      ],
+                                    ),
+                                  )
+                                ],
+                              )),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              )
-            ],
+                Positioned(
+                  right: 40,
+                  top: 8,
+                  child: Image.asset(
+                    'assets/images/business.png',
+                    height: 50,
+                  ),
+                )
+              ],
+            ),
           ),
         ),
       ),
@@ -492,72 +577,72 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //Location
   Widget locationSection() {
-    return Padding(
-      padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
-      child: new Container(
-        height: 125.0,
-        width: 330,
-        decoration: BoxDecoration(
-          color: Color.fromRGBO(232, 159, 159, 1),
-          shape: BoxShape.rectangle,
-          borderRadius: BorderRadius.all(Radius.circular(25.0)),
-        ),
-        child: Stack(children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(left: 30.0, top: 20),
-            child: Row(
-              children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text("Your location",
-                        textAlign: TextAlign.left,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Color.fromRGBO(0, 0, 0, 0.35),
-                        )),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3.5),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: 180),
-                        child: Text(country.name,
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
-                            textAlign: TextAlign.left,
-                            style: GoogleFonts.poppins(
-                              height: 1.05,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 30,
-                              color: Colors.white,
-                            )),
-                      ),
-                    ),
-                    ConstrainedBox(
-                      constraints: BoxConstraints(maxWidth: 250),
-                      child: Text("Setapak, Wilayah Persekutuan",
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.poppins(
-                            height: 1.5,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                            color: Colors.white,
-                          )),
-                    )
-                  ],
-                ),
-              ],
-            ),
+    return InkWell(
+      onTap: () {
+        alertUser(context, "Stay tuned!",
+            "This feature has not yet been implemented, but it will be coming soon.");
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
+        child: new Container(
+          height: 125.0,
+          width: 330,
+          decoration: BoxDecoration(
+            color: Color.fromRGBO(232, 159, 159, 1),
+            shape: BoxShape.rectangle,
+            borderRadius: BorderRadius.all(Radius.circular(25.0)),
           ),
-          Positioned(
-            right: 40,
-            top: 20,
-            child: Image.asset(
-              'assets/images/street-map.png',
-              height: 50,
+          child: Stack(children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.only(left: 30.0, top: 20),
+              child: Row(
+                children: <Widget>[
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text("Your location",
+                          textAlign: TextAlign.left,
+                          style: GoogleFonts.poppins(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            color: Color.fromRGBO(0, 0, 0, 0.35),
+                          )),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 3.5),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(maxWidth: 180),
+                          child: Text(country.name,
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                              textAlign: TextAlign.left,
+                              style: GoogleFonts.poppins(
+                                height: 1.05,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 30,
+                                color: Colors.white,
+                              )),
+                        ),
+                      ),
+
+                      ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 250),
+                        child: getAddressStr(),
+                      )
+                    ],
+                  ),
+                ],
+              ),
             ),
-          )
-        ]),
+            Positioned(
+              right: 40,
+              top: 20,
+              child: Image.asset(
+                'assets/images/street-map.png',
+                height: 50,
+              ),
+            )
+          ]),
+        ),
       ),
     );
   }
