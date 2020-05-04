@@ -12,6 +12,8 @@ import 'package:countdown/countdown.dart';
 import 'package:http/http.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'news.dart';
+
 void main() {
   runApp(MyApp());
 }
@@ -311,8 +313,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   Widget newsSection() {
     return InkWell(
       onTap: () {
-        alertUser(context, "Stay tuned!",
-            "This feature has not yet been implemented, but it will be coming soon.");
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => News()),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.only(top: 20.0, bottom: 28.0),

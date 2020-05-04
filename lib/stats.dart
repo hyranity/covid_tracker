@@ -181,7 +181,7 @@ class _Stats extends State<Stats> {
         middleMainNumbers(country.todayDeaths),
         middleMainNumbers(country.deaths),
         middleMainNumbers(country.tests),
-        middleMainNumbersDouble(country.active/country.recovered),
+        middleMainNumbersDouble(country.recovered/(country.recovered+country.active)),
       ],
     );
   }
@@ -227,7 +227,7 @@ class _Stats extends State<Stats> {
 
   Widget middleMainNumbersDouble(double number) {
     return Text(
-      (100-number*100).toStringAsFixed(2) + "%",
+      (number*100).toStringAsFixed(2) + "%",
       textAlign: TextAlign.left,
       style: GoogleFonts.poppins(
         fontWeight: FontWeight.w600,
