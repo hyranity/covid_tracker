@@ -24,7 +24,7 @@ class NewsItem {
   static Future<List<NewsItem>> GetNewsAPI(String selectedCountry) async {
     final response =
         await http.get("http://newsapi.org/v2/top-headlines?q=covid-19&country=" + selectedCountry +"&" + _apiKey);
-print("http://newsapi.org/v2/top-headlines?q=covid-19&country=my&" + _apiKey);
+print("http://newsapi.org/v2/top-headlines?q=covid-19&pageSize=100&country=my&" + _apiKey);
     if (response.statusCode == 200) {
       //OK response
       return FromNewsAPIJson(json.decode(response.body));
@@ -44,10 +44,10 @@ print("http://newsapi.org/v2/top-headlines?q=covid-19&country=my&" + _apiKey);
     for (var i = 0; i < json['totalResults']; i++) {
 
       newsList.add(new NewsItem(
-          source: json['articles'][i]['source']['name'],
+          source: json['articles'][i]['source']['name'].toString().substring(0, json['articles'][i]['source']['name'].toString().indexOf('.')), //Removes .com, etc
           title: json['articles'][i]['title'],
           body: json['articles'][i]['description'],
-          sourceUrl: json['articles'][i]['url'],
+          sourceUrl: json['articles'][i]['url'].toString(),
           publishedAt:
               DateTime.tryParse(json['articles'][i]['publishedAt']).toLocal(),
           imgUrl: json['articles'][i]['urlToImage'],

@@ -12,6 +12,7 @@ import 'package:countdown/countdown.dart';
 import 'package:http/http.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'Util/NewsItem.dart';
 import 'news.dart';
 
 void main() {
@@ -85,6 +86,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //Obtain user address
   Future<List<Placemark>> getAddress() async {
+    print("getting addresss");
     if (await geolocator.checkGeolocationPermissionStatus() !=
         GeolocationStatus.denied) {
       _currentPos = await geolocator.getCurrentPosition(
@@ -100,27 +102,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
   }
 
   Widget getAddressStr() {
-    FutureBuilder<List<Placemark>>(
-        future: getAddress(),
-        builder: (BuildContext context, AsyncSnapshot<List<Placemark>> snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            print("getting address");
-            return new CircularProgressIndicator();
-          }
-
-          Placemark place = snap.data[0];
-          setState(() {
-            countryCode = place.isoCountryCode;
-          });
-          return Text(place.subLocality + ", " + place.locality,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.poppins(
-                height: 1.5,
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Colors.white,
-              ));
-        });
+    return Container();
   }
 
   DatabaseReference getRef(String countryCode) {
@@ -142,21 +124,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  @override
-  void didChangeAppLifeCycleState(AppLifecycleState state) {
-    setState(() {
-      print(state);
-      print("test");
-      if (state == AppLifecycleState.resumed) {
-        ref.once().then((DataSnapshot snapshot) {
-          setState(() {
-            update(snapshot);
-          });
-        });
-      }
-    });
-  }
-
   //Update data
   update(DataSnapshot snapshot) {
     tries = 0;
@@ -164,12 +131,12 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       getAddress();
     });
 
-    while (place == null && tries < 5) {
-      setState(() {
-        getAddress();
-        tries++;
-      });
-    }
+    //while (place == null && tries < 5) {
+    //      setState(() {
+    //        getAddress();
+    //        tries++;
+    //      });
+    //    }
 
     //Get from JSON url
     futureCountry = CovidCountry.Get(countryCode);
@@ -221,7 +188,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
     ref.once().then((DataSnapshot snapshot) {
       if (!hasSetState) {
         update(snapshot);
-
         hasSetState = true;
       }
     });
@@ -230,15 +196,21 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
       resizeToAvoidBottomPadding: false,
       body: Center(
         child: OverflowBox(
-          child: Stack(
-            children: <Widget>[
-              FutureBuilder<void>(
-                  future: futureCountry,
-                  builder: (BuildContext context, AsyncSnapshot snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done)
-                      return new CircularProgressIndicator();
-
-                    return Padding(
+          child: FutureBuilder<void>(
+              future: futureCountry,
+              builder: (BuildContext context, AsyncSnapshot snapshot) {
+                if (snapshot.connectionState != ConnectionState.done)
+                  return Align(
+                      alignment: Alignment.center,
+                      child: Padding(
+                        padding: const EdgeInsets.all(100),
+                        child: new CircularProgressIndicator(
+                            valueColor: new AlwaysStoppedAnimation<Color>(
+                                Colors.black)),
+                      ));
+                return Stack(
+                  children: <Widget>[
+                    Padding(
                       padding: const EdgeInsets.only(top: 70.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,13 +243,14 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                           locationSection()
                         ],
                       ),
-                    );
-                  }),
-              //Refresh button
-              refreshButton()
-            ],
-          ),
-        ),
+                    ),
+
+                    //Refresh button
+                    refreshButton()
+                  ],
+                );
+              }),
+        ), // this
       ),
     );
   }
@@ -328,54 +301,81 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
             shape: BoxShape.rectangle,
             borderRadius: BorderRadius.all(Radius.circular(25.0)),
           ),
-          child: Padding(
-            padding: const EdgeInsets.only(left: 30.0, top: 20),
-            child: Row(
-              children: <Widget>[
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: FutureBuilder(
+            future: AppWide.LoadNewsList(countryCode),
+            builder:
+                (BuildContext conext, AsyncSnapshot<List<NewsItem>> snapshot) {
+              if (snapshot.connectionState != ConnectionState.done ||
+                  !snapshot.hasData)
+                return Align(
+                    alignment: Alignment.center,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: new CircularProgressIndicator(
+                          valueColor:
+                              new AlwaysStoppedAnimation<Color>(Colors.white)),
+                    ));
+
+              return Padding(
+                padding: const EdgeInsets.only(left: 30.0, top: 20),
+                child: Stack(
                   children: <Widget>[
-                    Text("News",
-                        textAlign: TextAlign.left,
-                        style: GoogleFonts.poppins(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: Color.fromRGBO(91, 131, 136, 1),
-                        )),
-                    Padding(
-                      padding: const EdgeInsets.only(top: 3.5),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: 180),
-                        child: Text("New cases in Kota Kinabalu reported",
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 2,
-                            textAlign: TextAlign.left,
-                            style: GoogleFonts.poppins(
-                              height: 1.05,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 20,
-                              color: Colors.white,
-                            )),
-                      ),
+                    Row(
+                      children: <Widget>[
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text("News",
+                                textAlign: TextAlign.left,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                  color: Color.fromRGBO(91, 131, 136, 1),
+                                )),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 3.5),
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(maxWidth: 190),
+                                child: Text(snapshot.data[0].title,
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 2,
+                                    textAlign: TextAlign.left,
+                                    style: GoogleFonts.poppins(
+                                      height: 1.05,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 20,
+                                      color: Colors.white,
+                                    )),
+                              ),
+                            ),
+                            Container(
+                              width: 200,
+                              child: Text(snapshot.data[0].source,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: GoogleFonts.poppins(
+                                    height: 1.5,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                    color: Colors.white,
+                                  )),
+                            )
+                          ],
+                        ),
+                      ],
                     ),
-                    Text("Daily Express",
-                        style: GoogleFonts.poppins(
-                          height: 1.5,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                          color: Colors.white,
-                        ))
+                    Positioned(
+                      right: 40,
+                      top: 8,
+                      child: Image.asset(
+                        'assets/images/news.png',
+                        height: 50,
+                      ),
+                    )
                   ],
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 50, left: 35),
-                  child: Image.asset(
-                    'assets/images/news.png',
-                    height: 50,
-                  ),
-                )
-              ],
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -430,7 +430,7 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                                 )),
                           ),
                         ),
-                        Text("until next MCO update",
+                        Text("until next update",
                             style: GoogleFonts.poppins(
                               height: 1.5,
                               fontWeight: FontWeight.w600,
@@ -581,7 +581,10 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
 
   //Location
   Widget locationSection() {
-    return InkWell(
+    return Padding(
+      padding: const EdgeInsets.only(top: 0.0, bottom: 28.0),
+    );
+/*    return InkWell(
       onTap: () {
         alertUser(context, "Stay tuned!",
             "This feature has not yet been implemented, but it will be coming soon.");
@@ -627,7 +630,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
                               )),
                         ),
                       ),
-
                       ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: 250),
                         child: getAddressStr(),
@@ -648,6 +650,6 @@ class _MyHomePageState extends State<MyHomePage> with WidgetsBindingObserver {
           ]),
         ),
       ),
-    );
+    );*/
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:covidtracker/Util/AppWide.dart';
+import 'package:covidtracker/newsDetail.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
@@ -62,17 +63,25 @@ class _News extends State<News> {
             (BuildContext context, AsyncSnapshot<List<NewsItem>> snapshot) {
           // If data not yet loaded
           if (snapshot.connectionState != ConnectionState.done) {
-            return new CircularProgressIndicator();
+            return Align(
+                alignment: Alignment.center,
+                child: Padding(
+                  padding: const EdgeInsets.all(100),
+                  child: new CircularProgressIndicator(
+                      valueColor:
+                      new AlwaysStoppedAnimation<Color>(
+                          Color(0xffAEE0E5))),
+                ));
           }
 
-          if(!snapshot.hasData)
+          if (!snapshot.hasData)
             return Text("No data found");
 
           //Else, show data
           return ListView.separated(
             padding: EdgeInsets.only(top: 0),
 
-            separatorBuilder: (BuildContext context, int index){
+            separatorBuilder: (BuildContext context, int index) {
               return SizedBox(
                 height: 15,
 
@@ -80,7 +89,7 @@ class _News extends State<News> {
             },
             itemCount: snapshot.data.length,
             itemBuilder: (BuildContext context, int index) {
-              if(snapshot.data[index].isHighlighted)
+              if (snapshot.data[index].isHighlighted)
                 return importantNewsItem(snapshot.data[index]);
               else
                 return normalNewsItem(snapshot.data[index]);
@@ -92,145 +101,167 @@ class _News extends State<News> {
   }
 
   Widget importantNewsItem(NewsItem news) {
-    return Container(
-      decoration: BoxDecoration(
-          color: Color(0xffAEE0E5),
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          boxShadow: [
-            new BoxShadow(
-              color: Color(0xffE4E8E8),
-              blurRadius: 25,
-            )
-          ]),
-      child: Padding(
-        padding:
-        const EdgeInsets.only(top: 15, left: 25, right: 25, bottom: 15),
-        child: Stack(
-          children: <Widget>[
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  "1h  ago",
-                  style: GoogleFonts.poppins(
-                    color: Color(0xff5B8388),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(
-                  height: 5,
-                ),
-                Text(
-                  news.title,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    height: 1,
+    String elapsedHour = DateTime.now().difference(news.publishedAt).inHours.toString() + "h";
 
-                    fontSize: 20,
-                  ),
-                ),
-              ],
-            ),
-
-            //Source
-            Positioned(
-                right: 0,
-                child: Container(
-                  width: 125,
-                  child: Text(
-                    news.source,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-
-                    textAlign: TextAlign.right,
+    return InkWell(
+      onTap: (){
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewsDetail(news: news),
+            ));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+            color: Color(0xffAEE0E5),
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            boxShadow: [
+              new BoxShadow(
+                color: Color(0xffE4E8E8),
+                blurRadius: 25,
+              )
+            ]),
+        child: Padding(
+          padding:
+          const EdgeInsets.only(top: 15, left: 25, right: 25, bottom: 15),
+          child: Stack(
+            children: <Widget>[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    "$elapsedHour  ago",
                     style: GoogleFonts.poppins(
                       color: Color(0xff5B8388),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                )
-            )],
+                  SizedBox(
+                    height: 5,
+                  ),
+                  Text(
+                    news.title,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                      height: 1,
 
+                      fontSize: 20,
+                    ),
+                  ),
+                ],
+              ),
+
+              //Source
+              Positioned(
+                  right: 0,
+                  child: Container(
+                    width: 125,
+                    child: Text(
+                      news.source,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.poppins(
+                        color: Color(0xff5B8388),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  )
+              )],
+
+          ),
         ),
       ),
     );
   }
 
   Widget normalNewsItem(NewsItem news) {
-    return Container(
-      decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.all(Radius.circular(10)),
-          boxShadow: [
-            new BoxShadow(
-              color: Color(0xffE4E8E8),
-              blurRadius: 25,
-            )
-          ]),
-      child: Padding(
-        padding:
-            const EdgeInsets.only(top: 10, left: 25, right: 25, bottom: 10),
-        child: Stack(
-          children: <Widget>[
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  "1h  ago",
-                  style: GoogleFonts.poppins(
-                    color: Color(0xffA9E2EB),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                SizedBox(
-                  height: 5,
-                ),
-                Text(
-                  news.title,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                  style: GoogleFonts.poppins(
-                    color: Color(0xff5B8388),
-                    fontWeight: FontWeight.w600,
-                    height: 1,
+    String elapsedHour = DateTime.now().difference(news.publishedAt).inHours.toString() + "h";
 
-                    fontSize: 20,
-                  ),
-                ),
-              ],
-            ),
-
-            //Source
-            Positioned(
-              right: 0,
-              child: Container(
-                width: 125,
-                child: Text(
-                    news.source,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
-
-                    textAlign: TextAlign.right,
-                    style: GoogleFonts.poppins(
-                      color: Color(0xffAEE0E5),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-            ),
+    return InkWell(
+      onTap: (){
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewsDetail(news: news),
+            ));
+      },
+      child: Container(
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            boxShadow: [
+              new BoxShadow(
+                color: Color(0xffE4E8E8),
+                blurRadius: 25,
               )
-            )],
+            ]),
+        child: Padding(
+          padding:
+              const EdgeInsets.only(top: 10, left: 25, right: 25, bottom: 10),
+          child: Stack(
+            children: <Widget>[
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    "$elapsedHour  ago",
+                    style: GoogleFonts.poppins(
+                      color: Color(0xffA9E2EB),
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(
+                    height: 5,
+                  ),
+                  Text(
+                    news.title,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 2,
+                    style: GoogleFonts.poppins(
+                      color: Color(0xff5B8388),
+                      fontWeight: FontWeight.w600,
+                      height: 1,
 
+                      fontSize: 20,
+                    ),
+                  ),
+                ],
+              ),
+
+              //Source
+              Positioned(
+                right: 0,
+                child: Container(
+                  width: 125,
+                  child: Text(
+                      news.source,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+
+                      textAlign: TextAlign.right,
+                      style: GoogleFonts.poppins(
+                        color: Color(0xffAEE0E5),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+              ),
+                )
+              )],
+
+          ),
         ),
       ),
     );
   }
 
   Future<List<NewsItem>> getNewsList() async {
-    return NewsItem.GetNewsAPI(selectedCountry);
+    return AppWide.LoadNewsList(selectedCountry);
 
   }
 
@@ -302,7 +333,11 @@ class _News extends State<News> {
                         future: getCountryList(),
                         builder: (BuildContext context, AsyncSnapshot snapshot){
                           if(snapshot.connectionState != ConnectionState.done || !snapshot.hasData)
-                            return new CircularProgressIndicator();
+                            return Container(
+                              width: 100,
+                              height: 100,
+                              child: new CircularProgressIndicator()
+                            );
 
                           return DropdownButtonHideUnderline(
                             child: DropdownButton(
