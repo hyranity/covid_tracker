@@ -9,13 +9,17 @@ class AppWide {
   static Future<List<NewsItem>> newsList = NewsItem.GetNewsAPI(chosenCode);
 
   static Future<List<NewsItem>> LoadNewsList(String countryCode) async {
-    if(countryCode != chosenCode){
-      //Need re-search
-       newsList = NewsItem.GetNewsAPI(countryCode);
-       print("Re-searching news");
-       chosenCode = countryCode;
-    }
-    return await newsList;
+
+       return newsList = NewsItem.GetNewsAPI(countryCode).then((newsList){
+         print("Re-searching news");
+         chosenCode = countryCode;
+         print(newsList.length);
+         return newsList;
+       }).catchError((error){
+         print(error);
+       });
+
+
   }
 
 }

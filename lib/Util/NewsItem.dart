@@ -22,14 +22,17 @@ class NewsItem {
 
   //Get country data from JSON
   static Future<List<NewsItem>> GetNewsAPI(String selectedCountry) async {
-    final response =
-        await http.get("http://newsapi.org/v2/top-headlines?q=covid-19&country=" + selectedCountry +"&" + _apiKey);
-print("http://newsapi.org/v2/top-headlines?q=covid-19&pageSize=100&country=my&" + _apiKey);
-    if (response.statusCode == 200) {
-      //OK response
-      return FromNewsAPIJson(json.decode(response.body));
-    } else {
-      throw Exception("Can't fetch news");
+    try {
+      final response =
+          await http.get("http://newsapi.org/v2/top-headlines?q=covid-19&country=" + selectedCountry +"&" + _apiKey);
+      if (response.statusCode == 200) {
+        //OK response
+        return FromNewsAPIJson(json.decode(response.body));
+      } else {
+        throw Exception("Can't fetch news");
+      }
+    } on Exception catch (e) {
+      print(e.toString());
     }
   }
 
@@ -42,9 +45,17 @@ print("http://newsapi.org/v2/top-headlines?q=covid-19&pageSize=100&country=my&" 
 
     List<NewsItem> newsList = new List();
     for (var i = 0; i < json['totalResults']; i++) {
+      String source  = "";
+
+      //Removes .com, etc
+      if(json['articles'][i]['source']['name'].toString().indexOf('.')> -1){
+        source = json['articles'][i]['source']['name'].toString().substring(0, json['articles'][i]['source']['name'].toString().indexOf('.'));
+      } else{
+        source = json['articles'][i]['source']['name'].toString();
+      }
 
       newsList.add(new NewsItem(
-          source: json['articles'][i]['source']['name'].toString().substring(0, json['articles'][i]['source']['name'].toString().indexOf('.')), //Removes .com, etc
+          source: source,
           title: json['articles'][i]['title'],
           body: json['articles'][i]['description'],
           sourceUrl: json['articles'][i]['url'].toString(),

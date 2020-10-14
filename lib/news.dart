@@ -272,7 +272,7 @@ class _News extends State<News> {
         padding: EdgeInsets.all(10),
         child: Container(
           width: 390,
-          height: 325,
+          height: 300,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.all(Radius.circular(40)),
             color: Color(0xffA9E2EB),

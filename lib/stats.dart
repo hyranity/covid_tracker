@@ -20,7 +20,7 @@ class Stats extends StatefulWidget {
 }
 
 class _Stats extends State<Stats> {
-  String selectedCountry = AppWide.country.name;
+  String selectedCountry = "MY";
   CovidCountry country;
 
   @override
